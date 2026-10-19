@@ -52,13 +52,19 @@ for HOST_WOW_PATH in \
     fi
 done
 
-# Query partitions safely using key-value pairs (handles empty labels and spaces correctly)
+    # Query partitions safely using key-value pairs (handles empty labels and spaces correctly)
 while read -r line; do
     KNAME="" FSTYPE="" LABEL="" MOUNTPOINT="" TYPE=""
     eval "$line"
     [ -n "$KNAME" ] || continue
-    [ "$TYPE" = "part" ] || [ "$TYPE" = "disk" ] || continue
+    [ "$TYPE" = "part" ] || [ "$TYPE" = "disk" ] || [ "$TYPE" = "crypt" ] || continue
     DEV_PATH="/dev/$KNAME"
+
+    # If this is a raw partition that is already unlocked in /dev/mapper, skip the raw partition
+    DEV_BASE=$(basename "$DEV_PATH")
+    if [ -e "/dev/mapper/bitlk_${DEV_BASE}" ]; then
+        continue
+    fi
 
     # Ignore CD/ISO, swap, and Live media
     case "$FSTYPE" in

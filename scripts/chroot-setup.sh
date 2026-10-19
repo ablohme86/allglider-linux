@@ -233,6 +233,7 @@ echo "=== [6/7] Installing Persistent USB Auto-Mount, GPU Detection & Disk Scan 
 install -m 0755 /opt/allglider/scripts/allglider-persistence-mount.sh /usr/local/sbin/allglider-persistence-mount
 install -m 0755 /opt/allglider/scripts/allglider-gpu-check.sh /usr/local/sbin/allglider-gpu-check
 install -m 0755 /opt/allglider/scripts/allglider-disk-scan.sh /usr/local/sbin/allglider-disk-scan
+install -m 0755 /opt/allglider/scripts/allglider-unlock-bitlk.sh /usr/local/sbin/allglider-unlock-bitlk
 
 cat > /etc/systemd/system/allglider-disk-scan.service << 'EOF'
 [Unit]

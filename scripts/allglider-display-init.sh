@@ -114,7 +114,6 @@ show_encryption_popup() {
         local disks
         disks=$(jq -r '.encrypted_disks | join(", ")' "$apps_file" 2>/dev/null || echo "")
         [ -n "$disks" ] || return 0
-        local msg="Could not search for Battle.net in your existing drive ${disks} because it's encrypted, manual download of Battle.Net and Warcraft is required"
 
         # Wait a few seconds so desktop and allglider-welcome have started
         sleep 4
@@ -125,8 +124,23 @@ show_encryption_popup() {
 
         touch "$flag_file" 2>/dev/null || true
         if command -v zenity >/dev/null 2>&1; then
-            zenity --warning --title="Encrypted Drive Detected" --text="$msg" 2>/dev/null || true
+            if zenity --question --title="Encrypted Device Detected" \
+               --text="A BitLocker encrypted drive ($disks) was detected.\n\nDo you want to unlock the device?" 2>/dev/null; then
+                PASS=$(zenity --password --title="Unlock BitLocker Drive ($disks)" 2>/dev/null || true)
+                if [ -n "$PASS" ]; then
+                    FIRST_DISK=$(jq -r '.encrypted_disks[0]' "$apps_file" 2>/dev/null)
+                    if echo -n "$PASS" | sudo /usr/local/sbin/allglider-unlock-bitlk "$FIRST_DISK" 2>/dev/null; then
+                        zenity --info --title="Unlocked Successfully" --text="$FIRST_DISK unlocked successfully! Host games scanned." 2>/dev/null || true
+                    else
+                        zenity --error --title="Unlock Failed" --text="Could not unlock $FIRST_DISK with provided password." 2>/dev/null || true
+                    fi
+                fi
+            else
+                local msg="Could not search for Battle.net in your existing drive ${disks} because it's encrypted, manual download of Battle.Net and Warcraft is required"
+                zenity --warning --title="Encrypted Drive Detected" --text="$msg" 2>/dev/null || true
+            fi
         elif command -v notify-send >/dev/null 2>&1; then
+            local msg="Could not search for Battle.net in your existing drive ${disks} because it's encrypted, manual download of Battle.Net and Warcraft is required"
             notify-send -u critical "Encrypted Drive Detected" "$msg" 2>/dev/null || true
         fi
     fi

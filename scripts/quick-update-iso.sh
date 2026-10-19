@@ -145,6 +145,7 @@ EOF
         install -m 0755 /var/tmp/allglider-staging/scripts/allglider-persistence-mount.sh "$SQ_ROOT/usr/local/sbin/allglider-persistence-mount"
         install -m 0755 /var/tmp/allglider-staging/scripts/allglider-gpu-check.sh "$SQ_ROOT/usr/local/sbin/allglider-gpu-check"
         install -m 0755 /var/tmp/allglider-staging/scripts/allglider-disk-scan.sh "$SQ_ROOT/usr/local/sbin/allglider-disk-scan"
+        install -m 0755 /var/tmp/allglider-staging/scripts/allglider-unlock-bitlk.sh "$SQ_ROOT/usr/local/sbin/allglider-unlock-bitlk"
 
         cat > "$SQ_ROOT/etc/systemd/system/allglider-disk-scan.service" << "EOF"
 [Unit]

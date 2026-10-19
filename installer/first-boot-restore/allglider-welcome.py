@@ -125,6 +125,11 @@ class WelcomeWindow(Gtk.Window):
         self.refresh_btn.connect("clicked", lambda *_: self.refresh_checks())
         btn_box.pack_start(self.refresh_btn, False, False, 0)
 
+        self.unlock_btn = Gtk.Button(label="Unlock Drive...")
+        self.unlock_btn.connect("clicked", self.on_unlock_drive_clicked)
+        self.unlock_btn.set_no_show_all(True)
+        btn_box.pack_start(self.unlock_btn, False, False, 0)
+
         self.bnet_btn = Gtk.Button(label="Download & Launch Battle.net")
         self.bnet_btn.connect("clicked", self.on_install_battlenet)
         btn_box.pack_start(self.bnet_btn, False, False, 0)
@@ -141,6 +146,8 @@ class WelcomeWindow(Gtk.Window):
         self.close_btn = Gtk.Button(label="Finish (Don't show on startup)")
         self.close_btn.connect("clicked", self.on_complete)
         btn_box.pack_end(self.close_btn, False, False, 0)
+
+        self.detected_encrypted_disks = []
 
         self.refresh_checks()
 
@@ -193,17 +200,18 @@ class WelcomeWindow(Gtk.Window):
 
                 # Check for encrypted drives
                 if data.get("encrypted_found") and data.get("encrypted_disks"):
-                    disks_str = ", ".join(data.get("encrypted_disks"))
-                    self.encrypted_alert_msg = (
-                        f"Could not search for Battle.net in your existing drive {disks_str} "
-                        "because it's encrypted, manual download of Battle.Net and Warcraft is required"
-                    )
+                    self.detected_encrypted_disks = data.get("encrypted_disks")
+                    disks_str = ", ".join(self.detected_encrypted_disks)
+                    self.unlock_btn.show()
                     self.bnet_desc.set_text(
                         f"Encrypted Windows drive detected: {disks_str}\n"
-                        "Automatic detection is unavailable because the drive is encrypted.\n"
-                        "Click 'Download & Launch Battle.net' below to download and install Battle.net manually."
+                        "Click 'Unlock Drive...' below to enter your BitLocker password or recovery key,\n"
+                        "or click 'Download & Launch Battle.net' to install Battle.net manually."
                     )
-                    GLib.idle_add(self.show_encrypted_popup)
+                    GLib.idle_add(self.prompt_unlock_encrypted, self.detected_encrypted_disks)
+                else:
+                    self.detected_encrypted_disks = []
+                    self.unlock_btn.hide()
 
                 if data.get("battlenet_found") and data.get("battlenet_exe"):
                     self.discovered_bnet_exe = data["battlenet_exe"]
@@ -220,22 +228,140 @@ class WelcomeWindow(Gtk.Window):
             except Exception:
                 pass
 
-    def show_encrypted_popup(self):
-        flag_file = Path("/run/allglider-encrypted-popup-shown")
+    def on_unlock_drive_clicked(self, _btn):
+        if self.detected_encrypted_disks:
+            self.show_unlock_password_dialog(self.detected_encrypted_disks[0])
+
+    def prompt_unlock_encrypted(self, disks):
+        flag_file = Path("/run/allglider-encrypted-prompt-shown")
         if flag_file.exists():
             return
         flag_file.touch(exist_ok=True)
-        if getattr(self, "encrypted_alert_msg", None):
+
+        for disk in disks:
             dialog = Gtk.MessageDialog(
                 transient_for=self,
                 flags=Gtk.DialogFlags.MODAL | Gtk.DialogFlags.DESTROY_WITH_PARENT,
-                message_type=Gtk.MessageType.WARNING,
-                buttons=Gtk.ButtonsType.OK,
-                text="Encrypted Drive Detected",
+                message_type=Gtk.MessageType.QUESTION,
+                buttons=Gtk.ButtonsType.YES_NO,
+                text="Do you want to unlock the device?",
             )
-            dialog.format_secondary_text(self.encrypted_alert_msg)
-            dialog.run()
+            dialog.format_secondary_text(
+                f"A BitLocker encrypted drive ({disk}) was detected on this computer.\n\n"
+                "Unlocking it allows AllGlider to search for your existing Battle.net and "
+                "World of Warcraft installations so you can start playing without re-downloading."
+            )
+            resp = dialog.run()
             dialog.destroy()
+
+            if resp == Gtk.ResponseType.YES:
+                self.show_unlock_password_dialog(disk)
+            else:
+                self.bnet_desc.set_text(
+                    f"Could not search for Battle.net in your existing drive {disk} "
+                    "because it's encrypted, manual download of Battle.Net and Warcraft is required"
+                )
+
+    def show_unlock_password_dialog(self, disk):
+        pwd_dialog = Gtk.Dialog(
+            title="Unlock BitLocker Drive",
+            transient_for=self,
+            flags=Gtk.DialogFlags.MODAL | Gtk.DialogFlags.DESTROY_WITH_PARENT,
+        )
+        pwd_dialog.add_buttons(
+            "Cancel", Gtk.ResponseType.CANCEL,
+            "Unlock", Gtk.ResponseType.OK,
+        )
+        pwd_dialog.set_default_response(Gtk.ResponseType.OK)
+        pwd_dialog.set_default_size(440, 200)
+
+        box = pwd_dialog.get_content_area()
+        box.set_spacing(10)
+        box.set_border_width(14)
+
+        info_lbl = Gtk.Label(
+            label=f"Enter the BitLocker password or 48-digit recovery key for:\n<b>{disk}</b>",
+            use_markup=True,
+            xalign=0,
+        )
+        box.pack_start(info_lbl, False, False, 0)
+
+        entry = Gtk.Entry()
+        entry.set_visibility(False)
+        entry.set_activates_default(True)
+        entry.set_placeholder_text("Password or Recovery Key")
+        box.pack_start(entry, False, False, 0)
+
+        show_chk = Gtk.CheckButton(label="Show password")
+        show_chk.connect("toggled", lambda w: entry.set_visibility(w.get_active()))
+        box.pack_start(show_chk, False, False, 0)
+
+        status_lbl = Gtk.Label(xalign=0)
+        status_lbl.set_line_wrap(True)
+        box.pack_start(status_lbl, False, False, 0)
+
+        pwd_dialog.show_all()
+
+        while True:
+            response = pwd_dialog.run()
+            if response != Gtk.ResponseType.OK:
+                pwd_dialog.destroy()
+                self.bnet_desc.set_text(
+                    f"Could not search for Battle.net in your existing drive {disk} "
+                    "because it's encrypted, manual download of Battle.Net and Warcraft is required"
+                )
+                return
+
+            password = entry.get_text().strip()
+            if not password:
+                status_lbl.set_markup("<span color='#d9534f'>Please enter a password or recovery key.</span>")
+                continue
+
+            status_lbl.set_markup("<span>Unlocking and mounting drive, please wait...</span>")
+            while Gtk.events_pending():
+                Gtk.main_iteration()
+
+            unlock_bin = "/usr/local/sbin/allglider-unlock-bitlk"
+            if not Path(unlock_bin).exists():
+                unlock_bin = str(Path(__file__).resolve().parent.parent.parent / "scripts" / "allglider-unlock-bitlk.sh")
+
+            cmd = ["sudo", unlock_bin, disk]
+            try:
+                proc = subprocess.run(
+                    cmd,
+                    input=password.encode("utf-8"),
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    timeout=30,
+                )
+                if proc.returncode == 0:
+                    pwd_dialog.destroy()
+                    self.refresh_checks()
+
+                    success_dialog = Gtk.MessageDialog(
+                        transient_for=self,
+                        flags=Gtk.DialogFlags.MODAL | Gtk.DialogFlags.DESTROY_WITH_PARENT,
+                        message_type=Gtk.MessageType.INFO,
+                        buttons=Gtk.ButtonsType.OK,
+                        text="Drive Unlocked Successfully",
+                    )
+                    success_dialog.format_secondary_text(
+                        f"Drive {disk} has been unlocked and mounted.\n\n"
+                        "Desktop shortcuts for Battle.net and World of Warcraft have been created."
+                    )
+                    success_dialog.run()
+                    success_dialog.destroy()
+                    return
+                else:
+                    err_msg = proc.stderr.decode("utf-8", errors="replace").strip()
+                    first_err_line = err_msg.splitlines()[-1] if err_msg else "Incorrect password or recovery key."
+                    status_lbl.set_markup(
+                        f"<span color='#d9534f'>Failed to unlock: {first_err_line}</span>"
+                    )
+            except subprocess.TimeoutExpired:
+                status_lbl.set_markup("<span color='#d9534f'>Unlock timed out. Please try again.</span>")
+            except Exception as ex:
+                status_lbl.set_markup(f"<span color='#d9534f'>Error: {ex}</span>")
 
     def on_install_battlenet(self, _btn):
         if self.discovered_bnet_exe:
