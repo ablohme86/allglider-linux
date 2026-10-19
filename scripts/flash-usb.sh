@@ -5,11 +5,14 @@
 # ==============================================================================
 set -euo pipefail
 
-ISO_PATH="/home/alexander/Projects/allglider-linux/build/AllGlider-Live-F44-0.1.0-x86_64.iso"
-TARGET="/dev/sda"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+LATEST_ISO="$(ls -t "$REPO_ROOT"/build/AllGlider-Live-*.iso 2>/dev/null | head -n 1 || echo "")"
+ISO_PATH="${1:-$LATEST_ISO}"
+TARGET="${2:-/dev/sda}"
 
-if [ ! -f "$ISO_PATH" ]; then
-    echo "ERROR: ISO file not found: $ISO_PATH" >&2
+if [ -z "$ISO_PATH" ] || [ ! -f "$ISO_PATH" ]; then
+    echo "ERROR: ISO file not found: ${ISO_PATH:-<none>}" >&2
     exit 1
 fi
 

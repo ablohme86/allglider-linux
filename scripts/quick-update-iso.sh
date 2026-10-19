@@ -12,18 +12,28 @@ source "$REPO_ROOT/config/versions.lock"
 chmod +x "$REPO_ROOT"/scripts/*.sh "$REPO_ROOT"/installer/first-boot-restore/*.py "$REPO_ROOT"/installer/ui/*.py "$REPO_ROOT"/installer/migration/*.sh
 "$REPO_ROOT/scripts/stage-assets.sh"
 
+EXTRA_MOUNTS=()
+if [ -f "/usr/lib64/libcrypto.so.4.0.3" ]; then
+    EXTRA_MOUNTS+=("-v" "/usr/lib64/libcrypto.so.4.0.3:/usr/lib64/libcrypto.so.4.0.3:ro")
+fi
+if [ -f "/usr/lib64/libssl.so.4.0.3" ]; then
+    EXTRA_MOUNTS+=("-v" "/usr/lib64/libssl.so.4.0.3:/usr/lib64/libssl.so.4.0.3:ro")
+fi
+
 podman run --rm \
     --security-opt label=disable \
     -v "$REPO_ROOT:/workspace" \
     -v "$REPO_ROOT/cache/dnf-f44:/var/cache/libdnf5" \
     -v "/var/tmp/allglider-staging:/var/tmp/allglider-staging" \
-    -v "/usr/lib64/libcrypto.so.4.0.3:/usr/lib64/libcrypto.so.4.0.3:ro" \
-    -v "/usr/lib64/libssl.so.4.0.3:/usr/lib64/libssl.so.4.0.3:ro" \
+    "${EXTRA_MOUNTS[@]}" \
     "registry.fedoraproject.org/fedora:${FEDORA_RELEASE}" \
     bash -euxc '
         dnf -y install xorriso squashfs-tools grub2-tools grub2-tools-extra grub2-pc-modules grub2-efi-x64-modules dosfstools mtools gtk3 shared-mime-info cpio findutils >/dev/null
 
-        ISO_PATH="/workspace/build/AllGlider-Live-F44-0.1.0-x86_64.iso"
+        ISO_PATH=$(ls -t /workspace/build/AllGlider-Live-F*.iso 2>/dev/null | head -n 1 || echo "")
+        if [ -z "$ISO_PATH" ] || [ ! -f "$ISO_PATH" ]; then
+            ISO_PATH="/workspace/build/AllGlider-Live-F44-0.1.0-x86_64.iso"
+        fi
         WORK="/var/tmp/quick_iso"
         ISO_ROOT="$WORK/iso_root"
         SQ_ROOT="$WORK/sq_root"
@@ -99,8 +109,12 @@ podman run --rm \
         CUSTOM_WP="$SQ_ROOT/usr/share/backgrounds/allglider/allglider-wallpaper.png"
         if [ -f "$CUSTOM_WP" ]; then
             ln -sf /usr/share/backgrounds/allglider/allglider-wallpaper.png "$SQ_ROOT/usr/share/backgrounds/images/default.png"
+            ln -sf /usr/share/backgrounds/allglider/allglider-wallpaper.png "$SQ_ROOT/usr/share/backgrounds/images/default.svg"
             ln -sf /usr/share/backgrounds/allglider/allglider-wallpaper.png "$SQ_ROOT/usr/share/backgrounds/default.png"
-            ln -sf /usr/share/backgrounds/allglider/allglider-wallpaper.png "$SQ_ROOT/usr/share/backgrounds/xfce/xfce-shapes.svg" 2>/dev/null || true
+            for xf_name in xfce-shapes.svg xfce-teal.jpg xfce-blue.jpg xfce-stripes.png; do
+                ln -sf /usr/share/backgrounds/allglider/allglider-wallpaper.png "$SQ_ROOT/usr/share/backgrounds/xfce/$xf_name"
+            done
+            find "$SQ_ROOT/usr/share/backgrounds" -type f \( -name "*.png" -o -name "*.jpg" -o -name "*.svg" \) ! -path "*/allglider/*" -exec ln -sf /usr/share/backgrounds/allglider/allglider-wallpaper.png {} + 2>/dev/null || true
         fi
 
         # Remove desktop icon emblems (padlocks & symlink arrows) system-wide

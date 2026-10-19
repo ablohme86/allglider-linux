@@ -14,11 +14,12 @@ for sh_file in "$REPO_ROOT"/scripts/*.sh "$REPO_ROOT"/installer/migration/*.sh; 
     echo "  OK: $(basename "$sh_file")"
 done
 
-echo "=== [2/4] Checking Python GUI syntax (py_compile) ==="
+echo "=== [2/4] Checking Python syntax (py_compile) ==="
 python3 -m py_compile \
+    "$REPO_ROOT/scripts/fetch-latest-allglider.py" \
     "$REPO_ROOT/installer/first-boot-restore/allglider-welcome.py" \
     "$REPO_ROOT/installer/ui/allglider-installer.py"
-echo "  OK: allglider-welcome.py & allglider-installer.py"
+echo "  OK: Python scripts compiled cleanly"
 
 echo "=== [3/4] Checking Kickstart file ==="
 if command -v ksvalidator >/dev/null 2>&1; then

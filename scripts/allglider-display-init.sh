@@ -75,6 +75,63 @@ for path in glob.glob(os.path.join(desktop_dir, "*.desktop")):
     done
 }
 
+apply_wallpaper() {
+    local wp="/usr/share/backgrounds/allglider/allglider-wallpaper.png"
+    [ -f "$wp" ] || return 0
+    command -v xfconf-query >/dev/null 2>&1 || return 0
+
+    # 1. Update all currently connected monitor outputs from xrandr
+    for out in $CONNECTED_OUTPUTS; do
+        for p in \
+            "/backdrop/screen0/monitor${out}/workspace0/last-image" \
+            "/backdrop/screen0/monitor${out}/workspace0/image-path" \
+            "/backdrop/screen0/monitor${out}/last-image" \
+            "/backdrop/screen0/monitor${out}/image-path"; do
+            xfconf-query -c xfce4-desktop -p "$p" -s "$wp" --create -t string 2>/dev/null || true
+        done
+        xfconf-query -c xfce4-desktop -p "/backdrop/screen0/monitor${out}/workspace0/image-style" -s 5 --create -t int 2>/dev/null || true
+        xfconf-query -c xfce4-desktop -p "/backdrop/screen0/monitor${out}/image-style" -s 5 --create -t int 2>/dev/null || true
+    done
+
+    # 2. Update all monitor backdrops currently registered in xfconf
+    for prop in $(xfconf-query -c xfce4-desktop -l 2>/dev/null | grep -E 'image-path|last-image'); do
+        xfconf-query -c xfce4-desktop -p "$prop" -s "$wp" 2>/dev/null || true
+    done
+    for prop in $(xfconf-query -c xfce4-desktop -l 2>/dev/null | grep -E 'image-style'); do
+        xfconf-query -c xfce4-desktop -p "$prop" -s 5 2>/dev/null || true
+    done
+}
+
+show_encryption_popup() {
+    local apps_file="/run/allglider-host-apps.json"
+    local flag_file="/run/allglider-encrypted-popup-shown"
+    [ -f "$apps_file" ] || return 0
+    [ -f "$flag_file" ] && return 0
+
+    local is_enc
+    is_enc=$(jq -r '.encrypted_found // false' "$apps_file" 2>/dev/null || echo "false")
+    if [ "$is_enc" = "true" ]; then
+        local disks
+        disks=$(jq -r '.encrypted_disks | join(", ")' "$apps_file" 2>/dev/null || echo "")
+        [ -n "$disks" ] || return 0
+        local msg="Could not search for Battle.net in your existing drive ${disks} because it's encrypted, manual download of Battle.Net and Warcraft is required"
+
+        # Wait a few seconds so desktop and allglider-welcome have started
+        sleep 4
+        [ -f "$flag_file" ] && return 0
+        if pgrep -f "allglider-welcome" >/dev/null 2>&1; then
+            return 0
+        fi
+
+        touch "$flag_file" 2>/dev/null || true
+        if command -v zenity >/dev/null 2>&1; then
+            zenity --warning --title="Encrypted Drive Detected" --text="$msg" 2>/dev/null || true
+        elif command -v notify-send >/dev/null 2>&1; then
+            notify-send -u critical "Encrypted Drive Detected" "$msg" 2>/dev/null || true
+        fi
+    fi
+}
+
 if [ "$(id -u)" -eq 0 ]; then
     if [ -x /usr/local/sbin/allglider-disk-scan ]; then
         /usr/local/sbin/allglider-disk-scan 2>/dev/null || true
@@ -83,11 +140,16 @@ fi
 
 if [ "$(id -u)" -ne 0 ]; then
     trust_desktop_launchers
+    apply_wallpaper
     (
         sleep 2
         trust_desktop_launchers
+        apply_wallpaper
         command -v gtk-update-icon-cache >/dev/null 2>&1 && gtk-update-icon-cache -f /usr/share/icons/hicolor 2>/dev/null || true
         command -v xfdesktop >/dev/null 2>&1 && xfdesktop --reload 2>/dev/null || true
+        show_encryption_popup
     ) >/dev/null 2>&1 &
 fi
+
+
 

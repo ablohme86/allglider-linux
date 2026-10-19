@@ -112,13 +112,19 @@ if [ -d /opt/allglider/branding ]; then
     gtk-update-icon-cache -f /usr/share/icons/hicolor 2>/dev/null || true
 
     # 2. Install custom wallpapers and set as system-wide Fedora Xfce default for all monitor outputs
-    mkdir -p /usr/share/backgrounds/allglider /usr/share/backgrounds/images
+    mkdir -p /usr/share/backgrounds/allglider /usr/share/backgrounds/images /usr/share/backgrounds/xfce
     cp -a /opt/allglider/branding/wallpapers/* /usr/share/backgrounds/allglider/
     CUSTOM_WP=$(ls /usr/share/backgrounds/allglider/allglider-wallpaper.* | head -n 1)
     if [ -n "$CUSTOM_WP" ]; then
         ln -sf "$CUSTOM_WP" /usr/share/backgrounds/images/default.png
         ln -sf "$CUSTOM_WP" /usr/share/backgrounds/images/default.svg
         ln -sf "$CUSTOM_WP" /usr/share/backgrounds/default.png
+        # Override all Xfce default artwork so any unconfigured monitor falls back to AllGlider
+        for xf_name in xfce-shapes.svg xfce-teal.jpg xfce-blue.jpg xfce-stripes.png; do
+            ln -sf "$CUSTOM_WP" "/usr/share/backgrounds/xfce/$xf_name"
+        done
+        # Ensure any existing backgrounds under /usr/share/backgrounds point to AllGlider wallpaper
+        find /usr/share/backgrounds -type f \( -name "*.png" -o -name "*.jpg" -o -name "*.svg" \) ! -path "/usr/share/backgrounds/allglider/*" -exec ln -sf "$CUSTOM_WP" {} + 2>/dev/null || true
         if [ -f /etc/lightdm/lightdm-gtk-greeter.conf ]; then
             sed -i "s|^#*background=.*|background=$CUSTOM_WP|" /etc/lightdm/lightdm-gtk-greeter.conf
         fi

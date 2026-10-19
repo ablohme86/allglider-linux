@@ -1,0 +1,162 @@
+name: Build & Release AllGlider Live ISO
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release Tag Name (leave empty to auto-increment patch version)'
+        required: false
+        default: ''
+      prerelease:
+        description: 'Mark as Pre-release'
+        type: boolean
+        default: false
+      draft:
+        description: 'Create as Draft Release'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build Live ISO & Publish GitHub Release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Free disk space on runner
+        run: |
+          echo "Initial disk space:"
+          df -h /
+          sudo rm -rf \
+            /usr/share/dotnet \
+            /usr/local/lib/android \
+            /opt/ghc \
+            /opt/hostedtoolcache \
+            /usr/local/share/boost \
+            "$AGENT_TOOLSDIRECTORY" 2>/dev/null || true
+          echo "Cleaned disk space:"
+          df -h /
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install build tools & dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            podman \
+            xorriso \
+            mtools \
+            dosfstools \
+            curl \
+            jq \
+            ca-certificates
+
+      - name: Increment version & configure release tag
+        id: version_bump
+        run: |
+          chmod +x scripts/*.sh scripts/*.py installer/migration/*.sh installer/first-boot-restore/*.py installer/ui/*.py
+          
+          if [ -n "${{ github.event.inputs.tag_name }}" ]; then
+            # Explicit custom tag provided
+            ./scripts/bump-version.sh "${{ github.event.inputs.tag_name }}"
+          elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            # Triggered by git tag push
+            TAG_VER="${GITHUB_REF#refs/tags/}"
+            ./scripts/bump-version.sh "${TAG_VER#v}"
+          else
+            # Default workflow run: increment patch version (e.g. 0.1.0 -> 0.1.1)
+            ./scripts/bump-version.sh
+          fi
+
+          source config/versions.lock
+          TAG="v${ALLGLIDER_DISTRO_VERSION}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "distro_ver=$ALLGLIDER_DISTRO_VERSION" >> "$GITHUB_OUTPUT"
+          echo "ag_ver=$ALLGLIDER_VERSION" >> "$GITHUB_OUTPUT"
+          echo "proton_ver=$PROTON_VERSION" >> "$GITHUB_OUTPUT"
+          echo "wb_ver=$WINBRIDGE_VERSION" >> "$GITHUB_OUTPUT"
+
+          # Push bumped version back to repository if not running on a detached tag
+          if [[ "${{ github.ref }}" != refs/tags/* ]]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add VERSION config/versions.lock
+            if ! git diff --staged --quiet; then
+              git commit -m "chore(release): bump distro version to ${TAG} [skip ci]"
+              git push origin HEAD:${{ github.ref_name }} 2>/dev/null || true
+            fi
+          fi
+
+      - name: Verify repository scripts & syntax
+        run: |
+          ./scripts/verify-image.sh
+
+      - name: Build AllGlider Live ISO (Fedora 44 container)
+        run: |
+          ./scripts/build-iso.sh --container
+
+      - name: Validate built ISO artifacts
+        run: |
+          ls -lh build/
+          ISO_FILE=$(ls build/*.iso | head -n 1)
+          if [ ! -f "$ISO_FILE" ]; then
+            echo "ERROR: ISO file was not generated in build/!" >&2
+            exit 1
+          fi
+          echo "Built ISO: $ISO_FILE ($(du -h "$ISO_FILE" | cut -f1))"
+          (cd build && sha256sum "$(basename "$ISO_FILE")" > "$(basename "$ISO_FILE").sha256")
+          cat "${ISO_FILE}.sha256"
+
+      - name: Create GitHub Release & Upload Artifacts
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version_bump.outputs.tag }}
+        run: |
+          EXTRA_FLAGS=()
+          if [ "${{ github.event.inputs.draft }}" = "true" ]; then
+            EXTRA_FLAGS+=("--draft")
+          fi
+          if [ "${{ github.event.inputs.prerelease }}" = "true" ]; then
+            EXTRA_FLAGS+=("--prerelease")
+          fi
+
+          NOTES=$(cat << EOF
+          # AllGlider Live Linux – ${TAG}
+
+          Official bootable Live USB image for AllGlider on modern PC gaming hardware.
+
+          ### Included Components & Versions
+          - **AllGlider Distro Version:** ${{ steps.version_bump.outputs.distro_ver }}
+          - **AllGlider App:** ${{ steps.version_bump.outputs.ag_ver }} (dynamically fetched from allglider.com)
+          - **Base System:** Fedora Linux 44 (x86_64) + Xfce 4.20 Desktop
+          - **Graphics Support:** Out-of-the-box NVIDIA (Proprietary Drivers) + AMD Radeon & Intel Mesa/Vulkan
+          - **Wine/Proton Engine:** ${{ steps.version_bump.outputs.proton_ver }} + UMU Launcher
+          - **Host Storage Scanner:** Automatic detection of Battle.net & World of Warcraft on host disks (with BitLocker / encryption alerts)
+          - **Persistence Support:** Auto-mounting persistent USB storage (\`ALLGLIDER_DATA\`)
+
+          ### Verification
+          Verify your download using SHA-256:
+          \`\`\`bash
+          sha256sum -c AllGlider-Live-*.iso.sha256
+          \`\`\`
+          EOF
+          )
+
+          gh release create "$TAG" build/*.iso build/*.iso.sha256 \
+            --title "AllGlider Live Linux ${TAG}" \
+            --notes "$NOTES" \
+            "${EXTRA_FLAGS[@]}"

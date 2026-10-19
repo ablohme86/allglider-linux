@@ -49,7 +49,14 @@ git -C "$CACHE_DIR/winbridge" fetch --all --tags
 git -C "$CACHE_DIR/winbridge" checkout --force "$WINBRIDGE_COMMIT"
 cp -a "$CACHE_DIR/winbridge" "$STAGING_DIR/src/winbridge"
 
-echo "=== [3/4] Staging AllGlider (${ALLGLIDER_VERSION}) ==="
+echo "=== [3/4] Staging AllGlider ==="
+if [ -f "$REPO_ROOT/scripts/fetch-latest-allglider.py" ]; then
+    python3 "$REPO_ROOT/scripts/fetch-latest-allglider.py" || true
+    # Reload versions.lock in case a newer version was detected and written
+    source "$REPO_ROOT/config/versions.lock"
+fi
+echo "Using AllGlider version ${ALLGLIDER_VERSION} (${ALLGLIDER_TARBALL})"
+
 LOCAL_AG_TARBALL="/home/alexander/Projects/openglider/dist/${ALLGLIDER_TARBALL}"
 if [ -f "$LOCAL_AG_TARBALL" ] && [ ! -f "$CACHE_DIR/${ALLGLIDER_TARBALL}" ]; then
     cp "$LOCAL_AG_TARBALL" "$CACHE_DIR/${ALLGLIDER_TARBALL}"

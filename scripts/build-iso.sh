@@ -49,13 +49,20 @@ ISO_NAME="AllGlider-Live-F${FEDORA_RELEASE}-${ALLGLIDER_DISTRO_VERSION}-x86_64.i
 
 if [ "$MODE" = "container" ]; then
     echo "=== Building Fedora ${FEDORA_RELEASE} Live ISO inside rootless Fedora ${FEDORA_RELEASE} container ==="
+    EXTRA_MOUNTS=()
+    if [ -f "/usr/lib64/libcrypto.so.4.0.3" ]; then
+        EXTRA_MOUNTS+=("-v" "/usr/lib64/libcrypto.so.4.0.3:/usr/lib64/libcrypto.so.4.0.3:ro")
+    fi
+    if [ -f "/usr/lib64/libssl.so.4.0.3" ]; then
+        EXTRA_MOUNTS+=("-v" "/usr/lib64/libssl.so.4.0.3:/usr/lib64/libssl.so.4.0.3:ro")
+    fi
+
     podman run --rm \
         --security-opt label=disable \
         -v "$REPO_ROOT:/workspace" \
         -v "$REPO_ROOT/cache/dnf-f44:/var/cache/libdnf5" \
         -v "/var/tmp/allglider-staging:/var/tmp/allglider-staging" \
-        -v "/usr/lib64/libcrypto.so.4.0.3:/usr/lib64/libcrypto.so.4.0.3:ro" \
-        -v "/usr/lib64/libssl.so.4.0.3:/usr/lib64/libssl.so.4.0.3:ro" \
+        "${EXTRA_MOUNTS[@]}" \
         "registry.fedoraproject.org/fedora:${FEDORA_RELEASE}" \
         /workspace/scripts/build-iso-container-inner.sh
 else

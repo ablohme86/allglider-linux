@@ -9,10 +9,14 @@ set -uo pipefail
 
 RESULTS_FILE="/run/allglider-host-apps.json"
 SCAN_BASE="/run/allglider/disks"
-mkdir -p "$SCAN_BASE"
+if ! mkdir -p "$SCAN_BASE" 2>/dev/null; then
+    SCAN_BASE="/tmp/allglider/disks"
+    RESULTS_FILE="/tmp/allglider-host-apps.json"
+    mkdir -p "$SCAN_BASE" 2>/dev/null || true
+fi
 
 # Initialize empty state if not existing
-echo '{"battlenet_found": false, "wow_found": false}' > "$RESULTS_FILE"
+echo '{"battlenet_found": false, "wow_found": false}' > "$RESULTS_FILE" 2>/dev/null || true
 chmod 0644 "$RESULTS_FILE" 2>/dev/null || true
 
 FOUND_BNET=""
@@ -21,11 +25,40 @@ FOUND_BNET_MNT=""
 FOUND_WOW=""
 FOUND_WOW_PART=""
 FOUND_WOW_MNT=""
+ENCRYPTED_DISKS=()
 
-# Query partitions
-while IFS=' ' read -r DEV_PATH FSTYPE LABEL MOUNTPOINT TYPE; do
-    [ -n "$DEV_PATH" ] || continue
+# Direct check for local host Battle.net & WoW (for testing and host environments)
+HOST_BNET_DIR="/home/alexander/.local/share/winbridge/shared/pfx/drive_c/Program Files (x86)/Battle.net"
+if [ -f "$HOST_BNET_DIR/Battle.net Launcher.exe" ]; then
+    FOUND_BNET="$HOST_BNET_DIR/Battle.net Launcher.exe"
+    FOUND_BNET_PART="host (/home/alexander)"
+    FOUND_BNET_MNT="/home/alexander"
+elif [ -f "$HOST_BNET_DIR/Battle.net.exe" ]; then
+    FOUND_BNET="$HOST_BNET_DIR/Battle.net.exe"
+    FOUND_BNET_PART="host (/home/alexander)"
+    FOUND_BNET_MNT="/home/alexander"
+fi
+
+for HOST_WOW_PATH in \
+    "/mnt/ekstra/Games/World of Warcraft/_forever_/Wow.exe" \
+    "/mnt/ekstra/Games/World of Warcraft/_anniversary_/WowClassic.exe" \
+    "/mnt/ekstra/Games/World of Warcraft/_classic_era_/WowClassic.exe" \
+    "/mnt/ekstra/Games/World of Warcraft/_retail_/Wow.exe"; do
+    if [ -f "$HOST_WOW_PATH" ]; then
+        FOUND_WOW="$HOST_WOW_PATH"
+        FOUND_WOW_PART="host (/mnt/ekstra)"
+        FOUND_WOW_MNT="/mnt/ekstra"
+        break
+    fi
+done
+
+# Query partitions safely using key-value pairs (handles empty labels and spaces correctly)
+while read -r line; do
+    KNAME="" FSTYPE="" LABEL="" MOUNTPOINT="" TYPE=""
+    eval "$line"
+    [ -n "$KNAME" ] || continue
     [ "$TYPE" = "part" ] || [ "$TYPE" = "disk" ] || continue
+    DEV_PATH="/dev/$KNAME"
 
     # Ignore CD/ISO, swap, and Live media
     case "$FSTYPE" in
@@ -38,6 +71,42 @@ while IFS=' ' read -r DEV_PATH FSTYPE LABEL MOUNTPOINT TYPE; do
         /dev/loop*|/dev/zram*) continue ;;
     esac
 
+    # Check if partition is encrypted (BitLocker / LUKS)
+    IS_ENCRYPTED=0
+    case "$FSTYPE" in
+        BitLocker|bitlocker|crypto_BitLocker|crypto_LUKS|bitlk)
+            IS_ENCRYPTED=1
+            ;;
+    esac
+
+    if [ "$IS_ENCRYPTED" -eq 0 ]; then
+        BLK_TYPE=$(blkid -s TYPE -o value "$DEV_PATH" 2>/dev/null || true)
+        case "$BLK_TYPE" in
+            BitLocker|bitlocker|crypto_BitLocker|crypto_LUKS|bitlk)
+                IS_ENCRYPTED=1
+                ;;
+        esac
+    fi
+
+    if [ "$IS_ENCRYPTED" -eq 0 ]; then
+        SIG=$(dd if="$DEV_PATH" bs=1 skip=3 count=8 2>/dev/null || true)
+        if [ "$SIG" = "-FVE-FS-" ]; then
+            IS_ENCRYPTED=1
+        fi
+    fi
+
+    if [ "$IS_ENCRYPTED" -eq 0 ] && command -v cryptsetup >/dev/null 2>&1; then
+        if cryptsetup bitlkDump "$DEV_PATH" >/dev/null 2>&1 || cryptsetup isLuks "$DEV_PATH" >/dev/null 2>&1; then
+            IS_ENCRYPTED=1
+        fi
+    fi
+
+    if [ "$IS_ENCRYPTED" -eq 1 ]; then
+        echo "AllGlider Disk Scan: Encrypted drive detected: $DEV_PATH"
+        ENCRYPTED_DISKS+=("$DEV_PATH")
+        continue
+    fi
+
     PART_NAME=$(basename "$DEV_PATH")
     MNT_DIR=""
     WE_MOUNTED=0
@@ -47,13 +116,18 @@ while IFS=' ' read -r DEV_PATH FSTYPE LABEL MOUNTPOINT TYPE; do
     else
         MNT_DIR="$SCAN_BASE/$PART_NAME"
         mkdir -p "$MNT_DIR"
-        # Try mounting read-only
+        # Try mounting read-only (standard, ntfs3, and ntfs-3g with ro)
         if mount -o ro "$DEV_PATH" "$MNT_DIR" 2>/dev/null || \
-           mount -t ntfs3 -o ro "$DEV_PATH" "$MNT_DIR" 2>/dev/null || \
-           mount -t ntfs-3g -o ro "$DEV_PATH" "$MNT_DIR" 2>/dev/null; then
+           mount -t ntfs-3g -o ro "$DEV_PATH" "$MNT_DIR" 2>/dev/null || \
+           mount -t ntfs3 -o ro "$DEV_PATH" "$MNT_DIR" 2>/dev/null; then
             WE_MOUNTED=1
         else
             rmdir "$MNT_DIR" 2>/dev/null || true
+            # Double check if mount failure was due to BitLocker
+            if command -v cryptsetup >/dev/null 2>&1 && cryptsetup bitlkDump "$DEV_PATH" >/dev/null 2>&1; then
+                echo "AllGlider Disk Scan: BitLocker encrypted drive confirmed on mount failure: $DEV_PATH"
+                ENCRYPTED_DISKS+=("$DEV_PATH")
+            fi
             continue
         fi
     fi
@@ -67,6 +141,15 @@ while IFS=' ' read -r DEV_PATH FSTYPE LABEL MOUNTPOINT TYPE; do
         "Battle.net/Battle.net Launcher.exe"
         "Battle.net/Battle.net.exe"
         "Games/Battle.net/Battle.net Launcher.exe"
+        "Games/Battle.net/Battle.net.exe"
+        "Spill/Battle.net/Battle.net Launcher.exe"
+        "Spill/Battle.net/Battle.net.exe"
+        "home/alexander/.local/share/winbridge/shared/pfx/drive_c/Program Files (x86)/Battle.net/Battle.net Launcher.exe"
+        "home/alexander/.local/share/winbridge/shared/pfx/drive_c/Program Files (x86)/Battle.net/Battle.net.exe"
+        "alexander/.local/share/winbridge/shared/pfx/drive_c/Program Files (x86)/Battle.net/Battle.net Launcher.exe"
+        "alexander/.local/share/winbridge/shared/pfx/drive_c/Program Files (x86)/Battle.net/Battle.net.exe"
+        ".local/share/winbridge/shared/pfx/drive_c/Program Files (x86)/Battle.net/Battle.net Launcher.exe"
+        ".local/share/winbridge/shared/pfx/drive_c/Program Files (x86)/Battle.net/Battle.net.exe"
     )
 
     PART_HAS_APP=0
@@ -83,9 +166,9 @@ while IFS=' ' read -r DEV_PATH FSTYPE LABEL MOUNTPOINT TYPE; do
             fi
         done
 
-        # If not found at common paths, try a quick find with maxdepth 5
+        # If not found at common paths, try a search up to 6 levels deep for Launcher or Battle.net.exe
         if [ -z "$FOUND_BNET" ]; then
-            QUICK_FIND=$(find "$MNT_DIR" -maxdepth 4 -iname "Battle.net Launcher.exe" 2>/dev/null | head -n 1)
+            QUICK_FIND=$(find "$MNT_DIR" -maxdepth 6 -type f \( -iname "Battle.net Launcher.exe" -o -iname "Battle.net.exe" \) 2>/dev/null | head -n 1)
             if [ -n "$QUICK_FIND" ] && [ -f "$QUICK_FIND" ]; then
                 FOUND_BNET="$QUICK_FIND"
                 FOUND_BNET_PART="$DEV_PATH"
@@ -108,6 +191,14 @@ while IFS=' ' read -r DEV_PATH FSTYPE LABEL MOUNTPOINT TYPE; do
             "World of Warcraft/Wow.exe"
             "Games/World of Warcraft/_retail_/Wow.exe"
             "Games/World of Warcraft/_classic_/WowClassic.exe"
+            "Games/World of Warcraft/_classic_era_/WowClassic.exe"
+            "Games/World of Warcraft/_anniversary_/WowClassic.exe"
+            "Games/World of Warcraft/_forever_/Wow.exe"
+            "Spill/World of Warcraft/_retail_/Wow.exe"
+            "Spill/World of Warcraft/_classic_/WowClassic.exe"
+            "Spill/World of Warcraft/_classic_era_/WowClassic.exe"
+            "Spill/World of Warcraft/_anniversary_/WowClassic.exe"
+            "Spill/World of Warcraft/_forever_/Wow.exe"
         )
         for REL in "${WOW_CANDIDATES[@]}"; do
             FULL_PATH="$MNT_DIR/$REL"
@@ -119,6 +210,16 @@ while IFS=' ' read -r DEV_PATH FSTYPE LABEL MOUNTPOINT TYPE; do
                 break
             fi
         done
+
+        if [ -z "$FOUND_WOW" ]; then
+            QUICK_WOW=$(find "$MNT_DIR" -maxdepth 6 -type f \( -iname "Wow.exe" -o -iname "WowClassic.exe" \) 2>/dev/null | head -n 1)
+            if [ -n "$QUICK_WOW" ] && [ -f "$QUICK_WOW" ]; then
+                FOUND_WOW="$QUICK_WOW"
+                FOUND_WOW_PART="$DEV_PATH"
+                FOUND_WOW_MNT="$MNT_DIR"
+                PART_HAS_APP=1
+            fi
+        fi
     fi
 
     # If this partition had nothing interesting and we mounted it temporarily, unmount it
@@ -127,13 +228,21 @@ while IFS=' ' read -r DEV_PATH FSTYPE LABEL MOUNTPOINT TYPE; do
         rmdir "$MNT_DIR" 2>/dev/null || true
     fi
 
-done < <(lsblk -rn -o PATH,FSTYPE,LABEL,MOUNTPOINT,TYPE 2>/dev/null)
+done < <(lsblk -P -o KNAME,FSTYPE,LABEL,MOUNTPOINT,TYPE 2>/dev/null)
 
 # Prepare JSON results
 BNET_BOOL="false"
 WOW_BOOL="false"
+ENCRYPTED_BOOL="false"
 [ -n "$FOUND_BNET" ] && BNET_BOOL="true"
 [ -n "$FOUND_WOW" ] && WOW_BOOL="true"
+[ ${#ENCRYPTED_DISKS[@]} -gt 0 ] && ENCRYPTED_BOOL="true"
+
+# Format encrypted disks as JSON array
+ENCRYPTED_JSON="[]"
+if [ ${#ENCRYPTED_DISKS[@]} -gt 0 ]; then
+    ENCRYPTED_JSON=$(printf '%s\n' "${ENCRYPTED_DISKS[@]}" | jq -R . | jq -s -c . 2>/dev/null || echo "[\"${ENCRYPTED_DISKS[0]}\"]")
+fi
 
 cat > "$RESULTS_FILE" << EOF
 {
@@ -144,7 +253,9 @@ cat > "$RESULTS_FILE" << EOF
   "wow_found": $WOW_BOOL,
   "wow_exe": "$FOUND_WOW",
   "wow_part": "$FOUND_WOW_PART",
-  "wow_mnt": "$FOUND_WOW_MNT"
+  "wow_mnt": "$FOUND_WOW_MNT",
+  "encrypted_found": $ENCRYPTED_BOOL,
+  "encrypted_disks": $ENCRYPTED_JSON
 }
 EOF
 chmod 0644 "$RESULTS_FILE" 2>/dev/null || true

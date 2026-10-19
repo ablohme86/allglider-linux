@@ -183,11 +183,28 @@ class WelcomeWindow(Gtk.Window):
             net_ok = False
         self.net_label.set_text(f"• Internet Connection: {'Connected' if net_ok else 'Offline'}")
 
-        # 5. Check for existing host Battle.net / WoW
+        # 5. Check for existing host Battle.net / WoW & Encrypted drives
         host_apps_file = Path("/run/allglider-host-apps.json")
+        if not host_apps_file.exists():
+            host_apps_file = Path("/tmp/allglider-host-apps.json")
         if host_apps_file.exists():
             try:
                 data = json.loads(host_apps_file.read_text(encoding="utf-8"))
+
+                # Check for encrypted drives
+                if data.get("encrypted_found") and data.get("encrypted_disks"):
+                    disks_str = ", ".join(data.get("encrypted_disks"))
+                    self.encrypted_alert_msg = (
+                        f"Could not search for Battle.net in your existing drive {disks_str} "
+                        "because it's encrypted, manual download of Battle.Net and Warcraft is required"
+                    )
+                    self.bnet_desc.set_text(
+                        f"Encrypted Windows drive detected: {disks_str}\n"
+                        "Automatic detection is unavailable because the drive is encrypted.\n"
+                        "Click 'Download & Launch Battle.net' below to download and install Battle.net manually."
+                    )
+                    GLib.idle_add(self.show_encrypted_popup)
+
                 if data.get("battlenet_found") and data.get("battlenet_exe"):
                     self.discovered_bnet_exe = data["battlenet_exe"]
                     part_info = f" on {data.get('battlenet_part')}" if data.get('battlenet_part') else ""
@@ -202,6 +219,23 @@ class WelcomeWindow(Gtk.Window):
                     self.wow_btn.show()
             except Exception:
                 pass
+
+    def show_encrypted_popup(self):
+        flag_file = Path("/run/allglider-encrypted-popup-shown")
+        if flag_file.exists():
+            return
+        flag_file.touch(exist_ok=True)
+        if getattr(self, "encrypted_alert_msg", None):
+            dialog = Gtk.MessageDialog(
+                transient_for=self,
+                flags=Gtk.DialogFlags.MODAL | Gtk.DialogFlags.DESTROY_WITH_PARENT,
+                message_type=Gtk.MessageType.WARNING,
+                buttons=Gtk.ButtonsType.OK,
+                text="Encrypted Drive Detected",
+            )
+            dialog.format_secondary_text(self.encrypted_alert_msg)
+            dialog.run()
+            dialog.destroy()
 
     def on_install_battlenet(self, _btn):
         if self.discovered_bnet_exe:
