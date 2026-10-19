@@ -2,14 +2,13 @@
 
 **AllGlider Live Linux** is a tailored, lightweight, plug-and-play live Linux distribution based on **Fedora 44 Xfce (x86_64)** designed for gaming and MMO automation:
 
+- **Zero-Install Host Disk Auto-Detection (`allglider-disk-scan`):** Automatically scans all internal disks and partitions across the host PC (Windows NTFS, Linux ext4/btrfs) for existing Battle.net and World of Warcraft installations during early boot. When found, it automatically links the binaries and creates ready-to-run desktop shortcuts—allowing you to launch directly from your existing Windows or Linux install without needing to re-download or re-install anything!
 - **Out-of-the-Box Multi-GPU Support:** Pre-compiled proprietary **NVIDIA drivers** (RPM Fusion Nonfree `akmod-nvidia` with 32-bit & 64-bit Vulkan/CUDA) alongside full **AMD Radeon** and **Intel** Mesa/Vulkan support (32-bit + 64-bit) in a single unified ISO image.
 - **Pre-installed WinBridge + UMU + GE-Proton:** Runs Windows `.exe` game binaries directly from the desktop without needing Steam or manual Wine configuration.
 - **Pre-installed AllGlider:** Ready to launch immediately from the desktop (`~/AllGlider/Launcher`) together with `og-inputbridge.exe`.
-- **Automatic Host Disk Scanner (`allglider-disk-scan`):** Detects existing Battle.net and World of Warcraft installations on internal Windows (NTFS) or Linux partitions at boot time, automatically placing ready-to-run desktop shortcuts without requiring re-downloading or re-installing.
-- **128 GB Persistent USB Architecture (`ALLGLIDER_DATA`):** Dedicated persistent data partition automatically mounted at boot so that Battle.net, World of Warcraft, WinBridge prefixes, AllGlider profiles, and Wi-Fi credentials remain safe without risk of live overlay corruption.
-- **First-Boot Battle.net Setup Wizard (`allglider-welcome`):** Checks GPU acceleration, disk space, and network connectivity, automatically adapting depending on whether local game files were detected.
-- **Graphical System Installer with USB Migration (`allglider-installer`):** Easily install the operating system onto an internal NVMe/SSD drive, with 1-click migration of all settings, profiles, prefixes, and game installations from your USB drive.
-- **Custom Polished Branding:** Custom OpenGlider boot splash powered by Plymouth, clean desktop icon presentation (no lock/link badges), official AllGlider Whisker start menu icon, and seamless gradient desktop wallpapers.
+- **First-Boot Battle.net Setup Wizard (`allglider-welcome`):** Checks GPU acceleration, storage, and network connectivity. If Battle.net is detected on an internal disk, it offers immediate one-click launching; if not detected, it provides an automated downloader.
+- **Graphical System Installer with Disk Migration (`allglider-installer`):** Optionally install the operating system onto an internal NVMe/SSD drive with 1-click migration of your settings, profiles, and prefixes.
+- **Custom Polished Branding:** Custom OpenGlider boot splash powered by Plymouth, clean desktop icon presentation (padlock and symlink emblems removed), official AllGlider Whisker start menu icon, and seamless gradient desktop wallpapers.
 
 ---
 
@@ -36,12 +35,12 @@ allglider-linux/
 │   ├── quick-update-iso.sh             # Fast ISO repacker (~45s) for iterative branding & script updates
 │   ├── chroot-setup.sh                 # System configuration hook executed inside the chroot
 │   ├── allglider-disk-scan.sh          # Systemd service detecting host Battle.net & WoW installations
-│   ├── allglider-persistence-mount.sh  # Auto-mounts the persistent ALLGLIDER_DATA partition at boot
+│   ├── allglider-persistence-mount.sh  # Auto-mounts persistent data partition at boot (if present)
 │   ├── allglider-gpu-check.sh          # GPU detection and driver verification script
 │   ├── allglider-display-init.sh       # Display resolution initializer (1080p fallback)
 │   ├── remove-desktop-emblems.sh       # Removes desktop icon padlock and link emblems
-│   ├── prepare-usb.sh                  # Partitions a 128 GB USB with EFI, LIVE, and persistent DATA
 │   ├── flash-usb.sh                    # Direct ISO flasher to USB target
+│   ├── prepare-usb.sh                  # Optional persistent USB partition creator
 │   ├── verify-image.sh                 # Validates project scripts, Kickstart, and output ISO
 │   └── collect-diagnostics.sh          # Collects GPU, Vulkan, WinBridge, and system log diagnostics
 ├── installer/
@@ -50,9 +49,9 @@ allglider-linux/
 │   ├── ui/
 │   │   └── allglider-installer.py      # Graphical disk installer to internal storage
 │   └── migration/
-│       └── migrate-data.sh             # Backs up and migrates user data from USB to internal disk
+│       └── migrate-data.sh             # Backs up and migrates user data to internal disk
 └── tests/
-    ├── run-qemu.sh                     # Runs ISO + persistent disk + virtual NVMe in QEMU/KVM (UEFI)
+    ├── run-qemu.sh                     # Runs ISO + virtual NVMe in QEMU/KVM (UEFI)
     └── migration/
         └── test-migration.sh           # Automated unit test suite for user data migration logic
 ```
@@ -81,17 +80,14 @@ For quick updates (~45 seconds) to scripts, branding, wallpapers, or desktop con
 ```
 
 ### 3. Test in QEMU/KVM
-Test boot, persistence mounting, and installer workflow in a virtual machine:
+Test boot, auto-detection, and installer workflow in a virtual machine:
 ```bash
 ./tests/run-qemu.sh
 ```
 
-### 4. Create a Bootable Persistent USB Drive
-Format a 128 GB USB flash drive with persistent storage:
-```bash
-sudo ./scripts/prepare-usb.sh build/AllGlider-Live-F44-0.1.0-x86_64.iso /dev/sdX
-```
-Or flash directly to a test USB drive:
+### 4. Flash to USB Drive
+Write the ISO directly to any USB flash drive using IsoWizardBoot, Rufus, BalenaEtcher, or the included script:
 ```bash
 sudo ./scripts/flash-usb.sh /dev/sdX
 ```
+*(Optional: If you still desire a dedicated persistent data partition on a flash drive, `./scripts/prepare-usb.sh` is also available.)*
