@@ -112,122 +112,64 @@ jobs:
 
       - name: Prepare Release Artifacts (Split ISO for GitHub Release)
         run: |
-          ls -lh build/
-          ISO_FILE=$(ls build/*.iso 2>/dev/null | head -n 1)
-          if [ -z "$ISO_FILE" ] || [ ! -f "$ISO_FILE" ]; then
-            echo "ERROR: ISO file was not generated in build/!" >&2
-            exit 1
-          fi
-          ISO_BASENAME="$(basename "$ISO_FILE")"
-          echo "Processing $ISO_BASENAME ($(du -h "$ISO_FILE" | cut -f1))"
-
-          # Generate SHA256 of the complete unified ISO
-          (cd build && sha256sum "$ISO_BASENAME" > "${ISO_BASENAME}.sha256")
-          cat "build/${ISO_BASENAME}.sha256"
-
-          # GitHub Releases enforces a strict 2.0 GiB (2,147,483,648 bytes) per-file limit.
-          # Split the ISO into <= 1900MB parts (.001, .002, ...)
-          split -d -a 3 --numeric-suffixes=1 -b 1900M "$ISO_FILE" "build/${ISO_BASENAME}."
-
-          # Compute the join command for Windows copy /b
-          JOIN_CMD="copy /b"
-          FIRST=1
-          for part in $(ls build/${ISO_BASENAME}.0*); do
-            BN=$(basename "$part")
-            if [ $FIRST -eq 1 ]; then
-              JOIN_CMD="$JOIN_CMD \"$BN\""
-              FIRST=0
-            else
-              JOIN_CMD="$JOIN_CMD + \"$BN\""
-            fi
-          done
-          JOIN_CMD="$JOIN_CMD \"${ISO_BASENAME}\""
-
-          cat > build/join-iso.bat << EOF
-@echo off
-setlocal
-title AllGlider Live ISO Reassembler
-echo ========================================================
-echo  AllGlider Live Linux - ISO Reassembler
-echo ========================================================
-echo.
-echo Merging ISO chunks into ${ISO_BASENAME}...
-$JOIN_CMD
-if not exist "${ISO_BASENAME}" (
-    echo.
-    echo ERROR: Failed to merge ISO chunks!
-    pause
-    exit /b 1
-)
-echo.
-echo Calculating SHA-256 checksum...
-certutil -hashfile "${ISO_BASENAME}" SHA256
-echo.
-echo Success! ${ISO_BASENAME} is ready to flash with Rufus or BalenaEtcher.
-echo ========================================================
-pause
-EOF
-          sed -i 's/$/\r/' build/join-iso.bat
-
-          cat > build/join-iso.sh << EOF
-#!/usr/bin/env bash
-set -euo pipefail
-echo "=== AllGlider Live Linux - ISO Reassembler ==="
-echo "Merging ISO chunks into ${ISO_BASENAME}..."
-cat "${ISO_BASENAME}".0* > "${ISO_BASENAME}"
-echo "Verifying SHA-256 checksum..."
-sha256sum -c "${ISO_BASENAME}.sha256"
-echo "=== Success! ${ISO_BASENAME} is ready to flash with Rufus or BalenaEtcher ==="
-EOF
-          chmod +x build/join-iso.sh
-
-          # Remove the oversized single ISO file so it does not trigger GitHub's 2GB upload limit
-          rm -f "$ISO_FILE"
-
-          ls -lh build/
+          ./scripts/prepare-release-artifacts.sh
 
       - name: Create GitHub Release & Upload Artifacts
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.version_bump.outputs.tag }}
+          DISTRO_VER: ${{ steps.version_bump.outputs.distro_ver }}
+          AG_VER: ${{ steps.version_bump.outputs.ag_ver }}
+          PROTON_VER: ${{ steps.version_bump.outputs.proton_ver }}
+          DRAFT: ${{ github.event.inputs.draft }}
+          PRERELEASE: ${{ github.event.inputs.prerelease }}
         run: |
           EXTRA_FLAGS=()
-          if [ "${{ github.event.inputs.draft }}" = "true" ]; then
+          if [ "$DRAFT" = "true" ]; then
             EXTRA_FLAGS+=("--draft")
           fi
-          if [ "${{ github.event.inputs.prerelease }}" = "true" ]; then
+          if [ "$PRERELEASE" = "true" ]; then
             EXTRA_FLAGS+=("--prerelease")
           fi
 
-          NOTES=$(cat << 'EOF'
-          # AllGlider Live Linux – ${{ steps.version_bump.outputs.tag }}
+          python3 -c "
+          import os
+          tag = os.environ.get('TAG', '')
+          distro = os.environ.get('DISTRO_VER', '')
+          ag = os.environ.get('AG_VER', '')
+          proton = os.environ.get('PROTON_VER', '')
+
+          notes = f'''# AllGlider Live Linux – {tag}
 
           Official bootable Live USB image for AllGlider on modern PC gaming hardware.
 
           ### Included Components & Versions
-          - **AllGlider Distro Version:** ${{ steps.version_bump.outputs.distro_ver }}
-          - **AllGlider App:** ${{ steps.version_bump.outputs.ag_ver }} (dynamically fetched from allglider.com)
+          - **AllGlider Distro Version:** {distro}
+          - **AllGlider App:** {ag} (dynamically fetched from allglider.com)
           - **Base System:** Fedora Linux 44 (x86_64) + Xfce 4.20 Desktop
           - **Graphics Support:** Out-of-the-box NVIDIA (Proprietary Drivers) + AMD Radeon & Intel Mesa/Vulkan
-          - **Wine/Proton Engine:** ${{ steps.version_bump.outputs.proton_ver }} + UMU Launcher
+          - **Wine/Proton Engine:** {proton} + UMU Launcher
           - **Host Storage Scanner:** Automatic detection of Battle.net & World of Warcraft on host disks (with BitLocker / encryption alerts)
-          - **Persistence Support:** Auto-mounting persistent USB storage (`ALLGLIDER_DATA`)
+          - **Persistence Support:** Auto-mounting persistent USB storage (\`ALLGLIDER_DATA\`)
 
           ### How to Assemble & Flash the ISO
-          Because GitHub Releases enforces a strict 2.0 GB per-file upload limit, the full Live ISO is split into 1.9 GB chunks (`.iso.001`, `.iso.002`, ...).
+          Because GitHub Releases enforces a strict 2.0 GB per-file upload limit, the full Live ISO is split into 1.9 GB chunks (\`.iso.001\`, \`.iso.002\`, ...).
 
           **To reassemble into the full bootable ISO:**
-          - **Windows (Recommended):** Download all `.iso.001`, `.iso.002`, ... parts and `join-iso.bat` into the same folder, then double-click `join-iso.bat`.
-          - **Windows / 7-Zip:** Right-click the `.iso.001` file in 7-Zip or WinRAR and choose **Extract Here** (or Combine files).
-          - **Linux / macOS:** Download all parts and run:
-            ```bash
-            cat AllGlider-Live-*.iso.0* > AllGlider-Live.iso
-            sha256sum -c AllGlider-Live-*.iso.sha256
-            ```
+          - **Windows (Recommended):** Download all \`.iso.001\`, \`.iso.002\`, ... parts and \`join-iso.bat\` into the same folder, then double-click \`join-iso.bat\`.
+          - **Windows / 7-Zip:** Right-click the \`.iso.001\` file in 7-Zip or WinRAR and choose **Extract Here** (or Combine files).
+          - **Linux / macOS:** Download all parts and \`join-iso.sh\` into the same folder, then run:
+            \`\`\`bash
+            ./join-iso.sh
+            \`\`\`
 
-          Once merged, flash the resulting `.iso` file to an 8 GB+ USB stick using [Rufus](https://rufus.ie/) (Windows) or [BalenaEtcher](https://etcher.balena.io/) (Windows/Mac/Linux).
-          EOF
-          )
+          Once merged, flash the resulting \`.iso\` file to an 8 GB+ USB stick using [Rufus](https://rufus.ie/) (Windows) or [BalenaEtcher](https://etcher.balena.io/) (Windows/Mac/Linux).
+          '''
+          # Strip leading indentation from notes lines
+          import inspect
+          with open('build/RELEASE_NOTES.md', 'w') as f:
+              f.write(inspect.cleandoc(notes))
+          "
 
           gh release create "$TAG" \
             build/*.0* \
@@ -235,5 +177,5 @@ EOF
             build/join-iso.bat \
             build/join-iso.sh \
             --title "AllGlider Live Linux ${TAG}" \
-            --notes "$NOTES" \
+            --notes-file build/RELEASE_NOTES.md \
             "${EXTRA_FLAGS[@]}"
