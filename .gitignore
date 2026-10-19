@@ -1,0 +1,22 @@
+# Build outputs and artifacts
+build/
+*.iso
+*.img
+*.qcow2
+*.raw
+*.log
+
+# Downloaded caches, Proton archives, and runtime bundles
+cache/
+downloads/
+packages/allglider/*.tar.gz
+packages/proton/
+packages/umu/
+
+# Local test and VM state
+tests/.vm/
+.DS_Store
+__pycache__/
+*.pyc
+*.pyo
+

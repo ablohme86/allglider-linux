@@ -1,0 +1,32 @@
+# AllGlider Live Linux - Locked Component Versions
+# Do not use floating "latest" tags in production builds.
+
+ALLGLIDER_DISTRO_VERSION="0.1.0"
+FEDORA_RELEASE="44"
+FEDORA_ARCH="x86_64"
+
+# AllGlider application
+ALLGLIDER_VERSION="1.6.4"
+ALLGLIDER_TARBALL="allglider-1.6.4-linux-x86_64.tar.gz"
+ALLGLIDER_SHA256="9b6078d70abc870b0cf83fa222aaa04f9f6484ba993cc875fcb0709c21763789"
+
+# WinBridge
+WINBRIDGE_REPO="https://github.com/ablohme86/winbridge.git"
+WINBRIDGE_VERSION="0.2.0"
+WINBRIDGE_COMMIT="46c1bf6c69b285f8c7aa59c740e85d6a6ea06cb6"
+
+# UMU Launcher (Proton without Steam - official Fedora 44 RPM)
+UMU_VERSION="1.4.4"
+UMU_RPM_URL="https://github.com/Open-Wine-Components/umu-launcher/releases/download/1.4.4/umu-launcher-1.4.4.fc44.x86_64.rpm"
+
+# GE-Proton (Pre-installed offline in /opt/allglider/proton)
+PROTON_VERSION="GE-Proton11-10"
+PROTON_URL="https://github.com/GloriousEggroll/proton-ge-custom/releases/download/GE-Proton11-10/GE-Proton11-10-x86_64.tar.gz"
+PROTON_SHA512_URL="https://github.com/GloriousEggroll/proton-ge-custom/releases/download/GE-Proton11-10/GE-Proton11-10-x86_64.sha512sum"
+
+# Steam Linux Runtime 3.0 (sniper) for offline UMU execution
+STEAM_RUNTIME_NAME="SteamLinuxRuntime_sniper"
+STEAM_RUNTIME_URL="https://repo.steampowered.com/steamrt3/images/0.20260915.102410/SteamLinuxRuntime_sniper.tar.xz"
+
+# Official Blizzard Battle.net Bootstrapper (fetched on First Boot)
+BATTLENET_INSTALLER_URL="https://downloader.battle.net/download/getInstallerForGame?os=win&gameProgram=BATTLENET_APP"

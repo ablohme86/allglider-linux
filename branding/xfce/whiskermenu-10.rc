@@ -1,0 +1,12 @@
+button-title=AllGlider
+button-icon=allglider
+show-button-title=false
+show-button-icon=true
+favorites=allglider.desktop,allglider-welcome.desktop,winbridge-manager.desktop,xfce4-terminal.desktop,thunar.desktop
+recent=
+custom-menu=false
+menu-width=480
+menu-height=540
+position-search-alternate=true
+position-commands-alternate=false
+position-categories-alternate=true

@@ -1,72 +1,97 @@
 # AllGlider Live Linux
 
-**AllGlider Live Linux** er en skreddersydd, minimalistisk og plug-and-play Linux-distribusjon basert på **Fedora 44 Xfce (x86_64)** med:
-- **Innebygd GPU-støtte rett ut av boksen:** Ferdigkompilerte proprietære **NVIDIA-drivere** (RPM Fusion Nonfree `akmod-nvidia` + 32-bit/64-bit Vulkan/CUDA) samt full **AMD Radeon** og **Intel** Mesa/Vulkan-støtte (32-bit + 64-bit) i samme ISO.
-- **WinBridge + UMU + GE-Proton ferdig installert:** Kjører Windows `.exe`-filer direkte fra skrivebordet uten at Steam trenger å være installert.
-- **AllGlider ferdig installert:** Klar til bruk fra skrivebordet (`~/AllGlider/Launcher`) sammen med `og-inputbridge.exe`.
-- **128 GB Persistent USB-arkitektur (`ALLGLIDER_DATA`):** Egen persistent datapartisjon som automatisk monteres ved oppstart, slik at Battle.net, World of Warcraft, WinBridge-prefixer, AllGlider-profiler og Wi-Fi-innstillinger lagres trygt uten risiko for korrupt Live-overlay.
-- **First-Boot Battle.net Veiviser (`allglider-welcome`):** Sjekker skjermkort, lagringsplass og nettverk, og laster ned og starter offisiell Battle.net-installer via WinBridge.
-- **Grafisk Disk-installer med USB-migrering (`allglider-installer`):** Lar deg installere hele systemet på en intern NVMe/SSD-disk og overfører alle innstillinger, profiler, WinBridge-prefixer og spill fra USB-en.
+**AllGlider Live Linux** is a tailored, lightweight, plug-and-play live Linux distribution based on **Fedora 44 Xfce (x86_64)** designed for gaming and MMO automation:
+
+- **Out-of-the-Box Multi-GPU Support:** Pre-compiled proprietary **NVIDIA drivers** (RPM Fusion Nonfree `akmod-nvidia` with 32-bit & 64-bit Vulkan/CUDA) alongside full **AMD Radeon** and **Intel** Mesa/Vulkan support (32-bit + 64-bit) in a single unified ISO image.
+- **Pre-installed WinBridge + UMU + GE-Proton:** Runs Windows `.exe` game binaries directly from the desktop without needing Steam or manual Wine configuration.
+- **Pre-installed AllGlider:** Ready to launch immediately from the desktop (`~/AllGlider/Launcher`) together with `og-inputbridge.exe`.
+- **Automatic Host Disk Scanner (`allglider-disk-scan`):** Detects existing Battle.net and World of Warcraft installations on internal Windows (NTFS) or Linux partitions at boot time, automatically placing ready-to-run desktop shortcuts without requiring re-downloading or re-installing.
+- **128 GB Persistent USB Architecture (`ALLGLIDER_DATA`):** Dedicated persistent data partition automatically mounted at boot so that Battle.net, World of Warcraft, WinBridge prefixes, AllGlider profiles, and Wi-Fi credentials remain safe without risk of live overlay corruption.
+- **First-Boot Battle.net Setup Wizard (`allglider-welcome`):** Checks GPU acceleration, disk space, and network connectivity, automatically adapting depending on whether local game files were detected.
+- **Graphical System Installer with USB Migration (`allglider-installer`):** Easily install the operating system onto an internal NVMe/SSD drive, with 1-click migration of all settings, profiles, prefixes, and game installations from your USB drive.
+- **Custom Polished Branding:** Custom OpenGlider boot splash powered by Plymouth, clean desktop icon presentation (no lock/link badges), official AllGlider Whisker start menu icon, and seamless gradient desktop wallpapers.
 
 ---
 
-## Mappestruktur
+## Directory Structure
 
 ```text
 allglider-linux/
 ├── README.md
 ├── VERSION
 ├── config/
-│   ├── fedora-live.ks           # Fedora 44 Kickstart med Xfce, NVIDIA akmods & Mesa
-│   ├── packages-base.txt        # Oversikt over grunnpakker
-│   ├── packages-gaming.txt      # Oversikt over GPU-, 32-bit-, Proton- og Qt6-pakker
-│   └── versions.lock            # Låste versjoner for Fedora 44, WinBridge, UMU, GE-Proton og AllGlider
+│   ├── fedora-live.ks                  # Fedora 44 Kickstart recipe (Xfce, NVIDIA akmods & Mesa)
+│   ├── packages-base.txt               # Base system package list
+│   ├── packages-gaming.txt             # GPU drivers, 32-bit libs, Proton & Qt6 package list
+│   └── versions.lock                   # Locked versions for Fedora 44, WinBridge, UMU, GE-Proton & AllGlider
+├── branding/
+│   ├── icons/                          # AllGlider application and panel icons
+│   ├── plymouth/                       # OpenGlider boot splash theme assets
+│   ├── wallpapers/                     # High-resolution desktop wallpapers
+│   └── xfce/                           # Xfce4 panel and Whisker Menu configurations
 ├── scripts/
-│   ├── stage-assets.sh          # Henter og sjekksummerer WinBridge, AllGlider og GE-Proton til staging
-│   ├── chroot-setup.sh          # Kjøres inne i Fedora 44-imaget under ISO-bygging
-│   ├── build-iso.sh             # Bygger Live-ISO i ren Fedora 44 Podman-container (eller på host)
-│   ├── prepare-usb.sh           # Oppretter 3-partisjons oppsett på 128 GB USB (EFI + LIVE + ALLGLIDER_DATA)
-│   ├── allglider-persistence-mount.sh # Systemd-script som auto-monterer ALLGLIDER_DATA ved oppstart
-│   ├── allglider-gpu-check.sh   # Detekterer NVIDIA/AMD/Intel ved boot og laster riktig modul
-│   ├── verify-image.sh          # Validerer skript, Kickstart og ferdig ISO
-│   └── collect-diagnostics.sh   # Samler inn GPU-, Vulkan-, WinBridge- og systemlogger
+│   ├── stage-assets.sh                 # Downloads, verifies, and stages WinBridge, AllGlider & GE-Proton
+│   ├── build-iso.sh                    # Builds the full Live ISO inside a clean Fedora 44 container
+│   ├── build-iso-container-inner.sh    # Inner container script for livemedia-creator
+│   ├── quick-update-iso.sh             # Fast ISO repacker (~45s) for iterative branding & script updates
+│   ├── chroot-setup.sh                 # System configuration hook executed inside the chroot
+│   ├── allglider-disk-scan.sh          # Systemd service detecting host Battle.net & WoW installations
+│   ├── allglider-persistence-mount.sh  # Auto-mounts the persistent ALLGLIDER_DATA partition at boot
+│   ├── allglider-gpu-check.sh          # GPU detection and driver verification script
+│   ├── allglider-display-init.sh       # Display resolution initializer (1080p fallback)
+│   ├── remove-desktop-emblems.sh       # Removes desktop icon padlock and link emblems
+│   ├── prepare-usb.sh                  # Partitions a 128 GB USB with EFI, LIVE, and persistent DATA
+│   ├── flash-usb.sh                    # Direct ISO flasher to USB target
+│   ├── verify-image.sh                 # Validates project scripts, Kickstart, and output ISO
+│   └── collect-diagnostics.sh          # Collects GPU, Vulkan, WinBridge, and system log diagnostics
 ├── installer/
 │   ├── first-boot-restore/
-│   │   └── allglider-welcome.py # Førstegangsveiviser og Battle.net-nedlaster
+│   │   └── allglider-welcome.py        # First-boot setup wizard and Battle.net launcher/downloader
 │   ├── ui/
-│   │   └── allglider-installer.py # Grafisk installer til intern disk (beskytter Live-USB)
+│   │   └── allglider-installer.py      # Graphical disk installer to internal storage
 │   └── migration/
-│       └── migrate-data.sh      # Sikkerhetskopierer og migrerer brukerdata fra USB til intern disk
+│       └── migrate-data.sh             # Backs up and migrates user data from USB to internal disk
 └── tests/
-    ├── run-qemu.sh              # Starter ISO + persistent disk + virtuell NVMe i QEMU/KVM (UEFI)
+    ├── run-qemu.sh                     # Runs ISO + persistent disk + virtual NVMe in QEMU/KVM (UEFI)
     └── migration/
-        └── test-migration.sh    # Automatisk enhetstest for migreringslogikken
+        └── test-migration.sh           # Automated unit test suite for user data migration logic
 ```
 
 ---
 
-## Kom i gang
+## Getting Started
 
-### 1. Verifiser oppsett og kjør tester
+### 1. Verify Setup and Run Tests
+Validate the Kickstart configuration, scripts, and data migration logic:
 ```bash
 ./scripts/verify-image.sh
 ./tests/migration/test-migration.sh
 ```
 
-### 2. Bygg Fedora 44 Live ISO (med NVIDIA, WinBridge, AllGlider og GE-Proton)
-Bygger i en ren, isolert Fedora 44-container via `podman`:
+### 2. Build the Live ISO
+Build the complete Fedora 44 Live ISO with NVIDIA drivers, WinBridge, AllGlider, and GE-Proton in an isolated container via Podman:
 ```bash
 ./scripts/build-iso.sh
 ```
-*(Tips: For å bygge en rask base-ISO uten å laste ned ~450 MB GE-Proton under første test, bruk `./scripts/build-iso.sh --skip-proton`.)*
+*(Tip: To build a fast base ISO without downloading GE-Proton during initial iteration, use `./scripts/build-iso.sh --skip-proton`.)*
 
-### 3. Test ISO, Persistens og Installer i QEMU/KVM
+For quick updates (~45 seconds) to scripts, branding, wallpapers, or desktop configs without full package reinstallation:
+```bash
+./scripts/quick-update-iso.sh
+```
+
+### 3. Test in QEMU/KVM
+Test boot, persistence mounting, and installer workflow in a virtual machine:
 ```bash
 ./tests/run-qemu.sh
 ```
 
-### 4. Skriv til 128 GB USB-minnepinne med persistent lagring
+### 4. Create a Bootable Persistent USB Drive
+Format a 128 GB USB flash drive with persistent storage:
 ```bash
 sudo ./scripts/prepare-usb.sh build/AllGlider-Live-F44-0.1.0-x86_64.iso /dev/sdX
 ```
-# allglider-linux
+Or flash directly to a test USB drive:
+```bash
+sudo ./scripts/flash-usb.sh /dev/sdX
+```
