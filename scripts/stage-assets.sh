@@ -31,10 +31,10 @@ mkdir -p "$STAGING_DIR"/{config,scripts,installer,branding,src,app,proton,umu-ru
 
 echo "=== [1/4] Staging project scripts, configs, branding, and installer ==="
 if [ -f "$REPO_ROOT/scripts/generate-plymouth-assets.py" ]; then
-    python3 "$REPO_ROOT/scripts/generate-plymouth-assets.py"
+    python3 "$REPO_ROOT/scripts/generate-plymouth-assets.py" 2>/dev/null || echo "NOTE: Using existing Plymouth assets"
 fi
 if [ -f "$REPO_ROOT/branding/wallpapers/generate-wallpaper.py" ]; then
-    python3 "$REPO_ROOT/branding/wallpapers/generate-wallpaper.py"
+    python3 "$REPO_ROOT/branding/wallpapers/generate-wallpaper.py" 2>/dev/null || echo "NOTE: Using existing Wallpaper assets"
 fi
 cp -a "$REPO_ROOT/config/." "$STAGING_DIR/config/"
 cp -a "$REPO_ROOT/scripts/." "$STAGING_DIR/scripts/"

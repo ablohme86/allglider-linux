@@ -42,7 +42,6 @@ jobs:
             /usr/share/dotnet \
             /usr/local/lib/android \
             /opt/ghc \
-            /opt/hostedtoolcache \
             /usr/local/share/boost \
             "$AGENT_TOOLSDIRECTORY" 2>/dev/null || true
           echo "Cleaned disk space:"
@@ -64,6 +63,8 @@ jobs:
             curl \
             jq \
             ca-certificates
+          python3 -m pip install --upgrade pip
+          python3 -m pip install Pillow
 
       - name: Increment version & configure release tag
         id: version_bump
