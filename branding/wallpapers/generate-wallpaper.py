@@ -49,7 +49,11 @@ text_x = cx - tw // 2
 text_y = logo_y + ag_logo.height + 22
 draw.text((text_x, text_y), text, font=font, fill=(255, 255, 255, 255))
 
-print("=== Pasting OpenGlider 'Powered by OpenGlider...' Watermark at Bottom ===")
+# Save Plymouth boot splash background WITHOUT watermark (Plymouth renders watermark dynamically at bottom)
+bg.save(SPLASH_OUT)
+print(f"Saved Plymouth Splash Background: {SPLASH_OUT}")
+
+print("=== Pasting OpenGlider 'Powered by OpenGlider...' Watermark at Bottom of Desktop Wallpaper ===")
 wm_path = os.path.join(REPO_ROOT, "branding", "plymouth", "watermark.png")
 if os.path.exists(wm_path):
     wm = Image.open(wm_path)
@@ -57,11 +61,9 @@ if os.path.exists(wm_path):
     wm_y = height - wm.height - 40
     bg.paste(wm, (wm_x, wm_y), wm)
 
-# Save both wallpaper and boot splash background
+# Save desktop wallpaper
 bg.convert("RGB").save(WP_OUT, quality=96)
-bg.save(SPLASH_OUT)
 print(f"Saved Desktop Wallpaper: {WP_OUT}")
-print(f"Saved Plymouth Splash Background: {SPLASH_OUT}")
 
 # Create fallback symlink / copies for Xfce & LightDM
 for name in ["default.png", "allglider-wallpaper.jpg"]:

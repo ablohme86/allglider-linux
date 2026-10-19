@@ -92,7 +92,8 @@ Terminal=false
 Categories=Game;Utility;
 StartupNotify=true
 EOF
-    ln -sf /usr/share/applications/allglider.desktop /etc/skel/Desktop/allglider.desktop
+    chmod 0666 /usr/share/applications/allglider.desktop
+    cp -f /usr/share/applications/allglider.desktop /etc/skel/Desktop/allglider.desktop
 fi
 
 echo "=== [4b/7] Applying AllGlider Branding, Custom Wallpaper & Minimal Xfce4 Config ==="
@@ -195,8 +196,9 @@ Icon=system-software-install
 Terminal=false
 Categories=System;Game;
 EOF
+chmod 0666 /usr/share/applications/allglider-welcome.desktop
 cp /usr/share/applications/allglider-welcome.desktop /etc/skel/.config/autostart/allglider-welcome.desktop
-ln -sf /usr/share/applications/allglider-welcome.desktop /etc/skel/Desktop/allglider-welcome.desktop
+cp -f /usr/share/applications/allglider-welcome.desktop /etc/skel/Desktop/allglider-welcome.desktop
 
 # Desktop entry for Graphical Disk Installer
 cat > /usr/share/applications/allglider-installer.desktop << 'EOF'
@@ -210,15 +212,16 @@ Icon=drive-harddisk
 Terminal=false
 Categories=System;
 EOF
-chmod 0755 /usr/share/applications/allglider-installer.desktop
-ln -sf /usr/share/applications/allglider-installer.desktop /etc/skel/Desktop/allglider-installer.desktop
+chmod 0666 /usr/share/applications/allglider-installer.desktop
+cp -f /usr/share/applications/allglider-installer.desktop /etc/skel/Desktop/allglider-installer.desktop
 
 # Copy WinBridge Manager desktop shortcut to Desktop if installed
 if [ -f /usr/local/share/applications/winbridge-manager.desktop ]; then
     cp -f /usr/local/share/applications/winbridge-manager.desktop /usr/share/applications/
-    chmod 0755 /usr/share/applications/winbridge-manager.desktop
-    ln -sf /usr/share/applications/winbridge-manager.desktop /etc/skel/Desktop/winbridge-manager.desktop
+    chmod 0666 /usr/share/applications/winbridge-manager.desktop
+    cp -f /usr/share/applications/winbridge-manager.desktop /etc/skel/Desktop/winbridge-manager.desktop
 fi
+chmod 0755 /etc/skel/Desktop/*.desktop 2>/dev/null || true
 
 echo "=== [6/7] Installing Persistent USB Auto-Mount, GPU Detection & Disk Scan Services ==="
 install -m 0755 /opt/allglider/scripts/allglider-persistence-mount.sh /usr/local/sbin/allglider-persistence-mount

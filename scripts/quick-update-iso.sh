@@ -218,16 +218,17 @@ EOF
             cp -f "$SQ_ROOT/usr/local/share/applications/winbridge-manager.desktop" "$SQ_ROOT/usr/share/applications/"
         fi
         chmod 0755 "$SQ_ROOT"/usr/share/applications/*.desktop
+        chmod 0666 "$SQ_ROOT"/usr/share/applications/allglider*.desktop "$SQ_ROOT"/usr/share/applications/winbridge*.desktop 2>/dev/null || true
 
-        # Populate Desktop icons as symlinks to /usr/share/applications
-        # Thunar natively trusts all desktop shortcuts that point to XDG data directories (/usr/share)
+        # Populate Desktop icons as standalone regular files owned by liveuser (never symlinks)
         rm -rf "$SQ_ROOT/etc/skel/Desktop"/* "$SQ_ROOT/home/liveuser/Desktop"/*
-        ln -sf /usr/share/applications/allglider.desktop "$SQ_ROOT/etc/skel/Desktop/allglider.desktop"
-        ln -sf /usr/share/applications/allglider-welcome.desktop "$SQ_ROOT/etc/skel/Desktop/allglider-welcome.desktop"
-        ln -sf /usr/share/applications/allglider-installer.desktop "$SQ_ROOT/etc/skel/Desktop/allglider-installer.desktop"
+        cp -f "$SQ_ROOT/usr/share/applications/allglider.desktop" "$SQ_ROOT/etc/skel/Desktop/"
+        cp -f "$SQ_ROOT/usr/share/applications/allglider-welcome.desktop" "$SQ_ROOT/etc/skel/Desktop/"
+        cp -f "$SQ_ROOT/usr/share/applications/allglider-installer.desktop" "$SQ_ROOT/etc/skel/Desktop/"
         if [ -f "$SQ_ROOT/usr/share/applications/winbridge-manager.desktop" ]; then
-            ln -sf /usr/share/applications/winbridge-manager.desktop "$SQ_ROOT/etc/skel/Desktop/winbridge-manager.desktop"
+            cp -f "$SQ_ROOT/usr/share/applications/winbridge-manager.desktop" "$SQ_ROOT/etc/skel/Desktop/"
         fi
+        chmod 0755 "$SQ_ROOT/etc/skel/Desktop"/*.desktop
 
         # Pre-seed ~/AllGlider in liveuser home
         rm -rf "$SQ_ROOT/home/liveuser/AllGlider"
@@ -251,8 +252,23 @@ EOF
         cp -a "$SQ_ROOT/etc/skel/.config/xfce4/." "$SQ_ROOT/home/liveuser/.config/xfce4/"
         cp -f /var/tmp/allglider-staging/branding/xfce/whiskermenu-*.rc "$SQ_ROOT/home/liveuser/.config/xfce4/panel/" 2>/dev/null || true
 
-        # Fix ownership to liveuser:liveuser (1000:1000) with -h so symlink targets remain root-owned
-        chown -h -R 1000:1000 "$SQ_ROOT/home/liveuser"
+        # Fix ownership to liveuser:liveuser (1000:1000)
+        chown -R 1000:1000 "$SQ_ROOT/home/liveuser"
+
+        for d in "$SQ_ROOT/etc/skel/Desktop" "$SQ_ROOT/home/liveuser/Desktop"; do
+            chmod 0755 "$d"/*.desktop 2>/dev/null || true
+            for f in "$d"/*.desktop; do
+                if [ -f "$f" ]; then
+                    csum=$(sha256sum "$f" 2>/dev/null | cut -d" " -f1)
+                    gio set -t string "$f" metadata::xfce-exe-checksum "$csum" 2>/dev/null || true
+                    gio set -t string "$f" metadata::trusted true 2>/dev/null || true
+                fi
+            done
+        done
+
+        # Re-apply emblem removal and GTK3 CSS to ensure skel and liveuser are pristine
+        /var/tmp/allglider-staging/scripts/remove-desktop-emblems.sh "$SQ_ROOT"
+        chown -R 1000:1000 "$SQ_ROOT/home/liveuser"
 
         # Inject custom Plymouth splash directly into early boot initrd.img
         echo "=== Injecting custom Plymouth splash into initrd.img ==="

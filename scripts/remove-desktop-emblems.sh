@@ -36,6 +36,8 @@ chmod 0666 "$TARGET_ROOT"/usr/share/applications/allglider*.desktop 2>/dev/null 
 chmod 0666 "$TARGET_ROOT"/usr/share/applications/winbridge*.desktop 2>/dev/null || true
 chmod 0666 "$TARGET_ROOT"/usr/share/applications/Battle.net*.desktop 2>/dev/null || true
 chmod 0666 "$TARGET_ROOT"/usr/share/applications/World*.desktop 2>/dev/null || true
+chmod 0666 "$TARGET_ROOT"/etc/skel/Desktop/*.desktop 2>/dev/null || true
+chmod 0666 "$TARGET_ROOT"/home/liveuser/Desktop/*.desktop 2>/dev/null || true
 
 # 4. Add GTK3 CSS rule to /etc/skel and /home/liveuser
 mkdir -p "$TARGET_ROOT/etc/skel/.config/gtk-3.0" "$TARGET_ROOT/home/liveuser/.config/gtk-3.0"

@@ -180,7 +180,7 @@ Categories=Game;
 StartupNotify=true
 EOF
         chmod 0666 "/usr/share/applications/Battle.net.desktop"
-        ln -sf "/usr/share/applications/Battle.net.desktop" "$ddir/Battle.net.desktop"
+        cp -f "/usr/share/applications/Battle.net.desktop" "$ddir/Battle.net.desktop"
         trust_desktop_file "$ddir/Battle.net.desktop"
     fi
 
@@ -198,9 +198,13 @@ Categories=Game;
 StartupNotify=true
 EOF
         chmod 0666 "/usr/share/applications/World of Warcraft.desktop"
-        ln -sf "/usr/share/applications/World of Warcraft.desktop" "$ddir/World of Warcraft.desktop"
+        cp -f "/usr/share/applications/World of Warcraft.desktop" "$ddir/World of Warcraft.desktop"
         trust_desktop_file "$ddir/World of Warcraft.desktop"
     fi
+
+    for dfile in "$ddir"/*.desktop; do
+        [ -f "$dfile" ] && trust_desktop_file "$dfile"
+    done
 }
 
 create_shortcuts "/etc/skel/Desktop"
